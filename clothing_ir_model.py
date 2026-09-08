@@ -358,44 +358,6 @@ def main():
     ir.build_index()
     ir.print_stats()
 
-    print("Running sample queries...\n")
-
-    sample_queries = [
-        "black cotton t-shirt for men",
-        "women's winter jacket warm fabric",
-        "breathable comfortable kurta",
-        "slim fit shirt button closure",
-        "printed saree festive wear",
-        "stretch denim jeans grey",
-    ]
-
-    for q in sample_queries:
-        print(f"\n>>> Query: \"{q}\"")
-        results = ir.tfidf_search(q, top_k=5)
-        ir.print_results(results, "TF-IDF Cosine Similarity")
-
-        bm25_results = ir.bm25_search(q, top_k=5)
-        ir.print_results(bm25_results, "BM25")
-
-    print("\n\nSample Boolean Queries:\n")
-    boolean_queries = [
-        ("cotton AND breathable", "AND"),
-        ("black OR white", "OR"),
-        ("winter NOT jacket", "NOT"),
-    ]
-    for q, mode in boolean_queries:
-        print(f">>> Boolean {mode}: \"{q}\"")
-        results = ir.boolean_search(q, mode=mode)
-        ir.print_boolean_results(results)
-
-    print("\n\nSample Query Expansion:\n")
-    for q in ["cotton comfortable", "winter warm"]:
-        print(f">>> Original: \"{q}\"")
-        expanded = ir.query_expansion(q)
-        print(f"    Expanded terms: {expanded}")
-        results = ir.tfidf_search(' '.join(expanded), top_k=5)
-        ir.print_results(results, "TF-IDF (Expanded)")
-
     interactive_mode(ir)
 
 

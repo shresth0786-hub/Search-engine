@@ -91,11 +91,7 @@ py clothing_ir_model.py
    - Average document length
    - Category distribution
    - Top terms by IDF
-4. Runs **6 sample queries** automatically, showing both TF-IDF and BM25 ranked
-   results with relevance scores.
-5. Shows **boolean search** examples (AND / OR).
-6. Shows a **query expansion** example.
-7. Starts an **interactive prompt** where you type your own queries.
+4. Starts an **interactive prompt** where you type your own queries.
 
 ## Interactive Commands
 
