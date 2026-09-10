@@ -32,11 +32,13 @@ When a document is indexed, its `TITLE` and `TEXT` are combined, then:
 - Split into tokens (words)
 - **Stop-words removed** (`the`, `and`, `for`, `with`, `this`, etc.)
 - Single-character tokens dropped
+- **Porter stemming** applied to reduce words to root forms
+  (e.g. "checked" → "check", "lavender" → "lavend", "polyester" → "polyest")
 
 ### 2. Inverted Index
-Builds a dictionary mapping each unique term to the set of documents that
+Builds a dictionary mapping each unique stemmed term to the set of documents that
 contain it. This powers fast Boolean search and candidate retrieval. The corpus
-produces **124 unique terms** across 100 documents.
+produces **122 unique terms** across 100 documents after stemming.
 
 ### 3. TF-IDF + Cosine Similarity (default search)
 - **TF (term frequency):** how often a term appears in a document, normalized
@@ -61,10 +63,30 @@ Set-based retrieval using the inverted index with three modes:
 
 Returns an unranked list of matching documents.
 
-### 6. Query Expansion
+### 6. Jaccard Similarity
+Set-based similarity between the query term set and each document's term set.
+Score = |intersection| / |union|. Simple but effective for comparing query and
+document vocabulary overlap.
+
+### 7. Query Expansion
 Expands a query with related terms found by **co-occurrence** in the corpus
 (terms that frequently appear together with the original query terms). The
 expanded query is then run through the TF-IDF search.
+
+### 8. Porter Stemming
+A self-contained Porter stemmer reduces words to their root forms before
+indexing and querying. This means queries like "shirts" or "breathable" match
+documents containing "shirt" or "breathable" without needing exact token
+matches.
+
+### 9. Precision / Recall / F1 Evaluation
+Built-in evaluation with 5 predefined test queries and relevance judgments.
+Run with the `eval` command to see per-query and average precision, recall,
+and F1 scores for TF-IDF retrieval.
+
+### 10. Query History
+All searches are logged during the session. Use the `history` command to
+review what queries were run and how many results each returned.
 
 ## How to Run
 
@@ -99,12 +121,15 @@ py clothing_ir_model.py
 |---------|-------------|
 | `your query here` | TF-IDF cosine similarity ranked search |
 | `bm25 your query` | BM25 ranked search |
+| `jaccard your query` | Jaccard set similarity search |
 | `and term1 term2` | Boolean AND search |
 | `or term1 term2` | Boolean OR search |
 | `not term1 term2` | Boolean NOT search |
 | `expand your query` | Query expansion, then TF-IDF search |
 | `cat category_name` | List documents in a category, e.g. `cat kurta` |
 | `stats` | Show corpus statistics |
+| `history` | Show query history |
+| `eval` | Run precision/recall/F1 evaluation |
 | `help` | Show available commands |
 | `quit` | Exit the program |
 
@@ -137,15 +162,47 @@ Each ranked result shows:
 
 ```
 clothing_ir_model.py
-├── Document (dataclass)     holds one indexed document
-├── ClothingIRModel           main engine
-│   ├── load_corpus()         parse corpus_100.txt
-│   ├── tokenize()            preprocessing pipeline
-│   ├── build_index()         TF, IDF, inverted index, doc vectors
-│   ├── tfidf_search()        ranked retrieval (cosine similarity)
-│   ├── bm25_search()         ranked retrieval (BM25)
-│   ├── boolean_search()      AND / OR / NOT set retrieval
-│   ├── query_expansion()     related-term expansion
-│   └── print_stats()         corpus statistics
-└── interactive_mode()        command-line UI
+├── PorterStemmer              self-contained English stemmer
+├── Document (dataclass)       holds one indexed document
+├── ClothingIRModel            main engine
+│   ├── load_corpus()          parse corpus_100.txt
+│   ├── tokenize()             preprocessing + stemming pipeline
+│   ├── build_index()          TF, IDF, inverted index, doc vectors
+│   ├── tfidf_search()         ranked retrieval (cosine similarity)
+│   ├── bm25_search()          ranked retrieval (BM25)
+│   ├── jaccard_search()       ranked retrieval (Jaccard similarity)
+│   ├── boolean_search()       AND / OR / NOT set retrieval
+│   ├── query_expansion()      related-term expansion
+│   ├── evaluate()             precision / recall / F1 per query
+│   ├── evaluate_all()         aggregated evaluation across queries
+│   ├── print_query_history()  session query log
+│   └── print_stats()          corpus statistics
+└── interactive_mode()         command-line UI
 ```
+
+## Code Documentation
+
+The Python module includes docstrings for the `Document` data class, the
+`ClothingIRModel` class, every public search/indexing method, and the
+interactive entry points. Inline comments are limited to the TF-IDF/BM25 IDF
+calculation and vector normalization, where the implementation is easiest to
+misread without context.
+
+### Programmatic Usage
+
+The model can also be used without the interactive prompt:
+
+```python
+from clothing_ir_model import ClothingIRModel
+
+ir = ClothingIRModel()
+ir.load_corpus("corpus_100.txt")
+ir.build_index()
+
+results = ir.tfidf_search("black cotton shirt", top_k=5)
+for document, score in results:
+  print(document.title, score)
+```
+
+Call `load_corpus()` before `build_index()`. The search methods should be used
+after indexing; otherwise the model has no terms or document vectors to rank.
