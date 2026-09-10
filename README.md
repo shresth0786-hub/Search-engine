@@ -9,6 +9,8 @@ documents and lets you search them using multiple retrieval techniques.
 |------|-------------|
 | `corpus_100.txt` | Input corpus: 100 clothing documents in XML-like format |
 | `clothing_ir_model.py` | The IR system (indexer + search engine + interactive UI) |
+| `Assignment_Clothing_IR.pdf` | Full project documentation (how it works, metrics, usage) |
+| `make_pdf.py` | Script that regenerates the PDF documentation |
 
 Each document in the corpus has four fields:
 
@@ -91,10 +93,24 @@ indexing and querying. This means queries like "shirts" or "breathable" match
 documents containing "shirt" or "breathable" without needing exact token
 matches.
 
-### 9. Precision / Recall / F1 Evaluation
+### 9. Evaluation Metrics (P/R/F1, MAP, NDCG)
 Built-in evaluation with 5 predefined test queries and relevance judgments.
-Run with the `eval` command to see per-query and average precision, recall,
-and F1 scores for TF-IDF retrieval.
+Run with the `eval` command to see per-query and average scores across all
+three ranking methods (TF-IDF, BM25, Jaccard):
+
+- **Precision** — fraction of retrieved documents that are relevant.
+- **Recall** — fraction of relevant documents that are retrieved.
+- **F1** — harmonic mean of precision and recall.
+- **AP (Average Precision)** — precision averaged at every rank where a
+  relevant document appears; sensitive to *ranking order*, not just the result set.
+- **MAP (Mean Average Precision)** — the mean of AP across all test queries.
+- **NDCG (Normalized Discounted Cumulative Gain)** — measures how well the
+  highest-rated documents appear near the top, discounting gains by rank.
+
+These ranking-aware metrics expose differences between methods that plain
+precision/recall hide. For example, Jaccard (which ignores term weight) scores
+lower NDCG/AP on some queries than TF-IDF and BM25, even when retrieving the
+same documents.
 
 ### 10. Query History
 All searches are logged during the session. Use the `history` command to
@@ -189,8 +205,10 @@ clothing_ir_model.py
 │   ├── phrase_search_ranked() phrase results ranked by match + TF-IDF
 │   ├── boolean_search()       AND / OR / NOT set retrieval
 │   ├── query_expansion()      related-term expansion
-│   ├── evaluate()             precision / recall / F1 per query
-│   ├── evaluate_all()         aggregated evaluation across queries
+│   ├── average_precision()    AP metric for a single ranked list
+│   ├── ndcg()                 NDCG metric for a single ranked list
+│   ├── evaluate()             P/R/F1/AP/NDCG per query
+│   ├── evaluate_all()         aggregated evaluation across queries (MAP, mean NDCG)
 │   ├── print_query_history()  session query log
 │   └── print_stats()          corpus statistics
 └── interactive_mode()         command-line UI

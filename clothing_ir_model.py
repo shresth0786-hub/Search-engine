@@ -365,7 +365,7 @@ class ClothingIRModel:
             candidate_ids.update(self.inverted_index.get(term, set()))
 
         scored = []
-        for doc_id in candidate_ids:
+        for doc_id in sorted(candidate_ids):
             sim = self.cosine_similarity(query_vec, doc_id)
             if sim > 0:
                 doc = next(d for d in self.documents if d.doc_id == doc_id)
@@ -385,7 +385,7 @@ class ClothingIRModel:
             candidate_ids.update(self.inverted_index.get(term, set()))
 
         scored = []
-        for doc_id in candidate_ids:
+        for doc_id in sorted(candidate_ids):
             score = self.bm25_score(query_terms, doc_id)
             if score > 0:
                 doc = next(d for d in self.documents if d.doc_id == doc_id)
@@ -405,7 +405,7 @@ class ClothingIRModel:
             candidate_ids.update(self.inverted_index.get(term, set()))
 
         scored = []
-        for doc_id in candidate_ids:
+        for doc_id in sorted(candidate_ids):
             sim = self.jaccard_similarity(query_terms, doc_id)
             if sim > 0:
                 doc = next(d for d in self.documents if d.doc_id == doc_id)
@@ -539,9 +539,44 @@ class ClothingIRModel:
 
     # -- evaluation -------------------------------------------------------
 
+    @staticmethod
+    def average_precision(ranked_ids: list[str], relevant_ids: set[str]) -> float:
+        """Average precision AP@k over a ranked list.
+
+        Precision is measured at every rank where a relevant document appears
+        and averaged over the total number of relevant documents.
+        """
+        hits = 0
+        sum_precision = 0.0
+        for rank, doc_id in enumerate(ranked_ids, 1):
+            if doc_id in relevant_ids:
+                hits += 1
+                sum_precision += hits / rank
+        if not relevant_ids:
+            return 0.0
+        return sum_precision / len(relevant_ids)
+
+    @staticmethod
+    def ndcg(ranked_ids: list[str], relevant_ids: set[str], k: int = 10) -> float:
+        """Normalized discounted cumulative gain at rank *k* (binary relevance).
+
+        DCG = sum(rel_i / log2(i+1)) and IDCG is the DCG of the ideal ranking;
+        NDCG is DCG / IDCG, bounded in [0, 1].
+        """
+        if not relevant_ids:
+            return 0.0
+        dcg = 0.0
+        for i, doc_id in enumerate(ranked_ids[:k], 1):
+            if doc_id in relevant_ids:
+                dcg += 1.0 / math.log2(i + 1)
+        idcg = 0.0
+        for i in range(1, min(len(relevant_ids), k) + 1):
+            idcg += 1.0 / math.log2(i + 1)
+        return dcg / idcg if idcg > 0 else 0.0
+
     def evaluate(self, query: str, relevant_doc_ids: set[str],
                  method: str = 'tfidf', top_k: int = 10) -> dict:
-        """Compute precision, recall, and F1 for a single query.
+        """Compute precision, recall, F1, AP, and NDCG for a single query.
 
         Parameters
         ----------
@@ -561,12 +596,15 @@ class ClothingIRModel:
         else:
             results = self.tfidf_search(query, top_k)
 
-        retrieved_ids = {doc.doc_id for doc, _ in results}
+        ranked_ids = [doc.doc_id for doc, _ in results]
+        retrieved_ids = set(ranked_ids)
         relevant_retrieved = retrieved_ids & relevant_doc_ids
 
         precision = len(relevant_retrieved) / len(retrieved_ids) if retrieved_ids else 0.0
         recall = len(relevant_retrieved) / len(relevant_doc_ids) if relevant_doc_ids else 0.0
         f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+        ap = self.average_precision(ranked_ids, relevant_doc_ids)
+        ndcg = self.ndcg(ranked_ids, relevant_doc_ids, k=top_k)
 
         return {
             'query': query,
@@ -577,11 +615,13 @@ class ClothingIRModel:
             'precision': precision,
             'recall': recall,
             'f1': f1,
+            'ap': ap,
+            'ndcg': ndcg,
         }
 
     def evaluate_all(self, test_queries: list[tuple[str, set[str]]],
                      method: str = 'tfidf', top_k: int = 10) -> dict:
-        """Run evaluation across multiple queries and return aggregated metrics."""
+        """Run evaluation across multiple queries and aggregate metrics (MAP, mean NDCG)."""
         evals = []
         for query, relevant_ids in test_queries:
             result = self.evaluate(query, relevant_ids, method, top_k)
@@ -590,6 +630,8 @@ class ClothingIRModel:
         avg_p = sum(e['precision'] for e in evals) / len(evals) if evals else 0
         avg_r = sum(e['recall'] for e in evals) / len(evals) if evals else 0
         avg_f1 = sum(e['f1'] for e in evals) / len(evals) if evals else 0
+        map_score = sum(e['ap'] for e in evals) / len(evals) if evals else 0
+        mean_ndcg = sum(e['ndcg'] for e in evals) / len(evals) if evals else 0
 
         return {
             'method': method,
@@ -597,6 +639,8 @@ class ClothingIRModel:
             'avg_precision': avg_p,
             'avg_recall': avg_r,
             'avg_f1': avg_f1,
+            'map': map_score,
+            'mean_ndcg': mean_ndcg,
             'per_query': evals,
         }
 
@@ -671,17 +715,21 @@ class ClothingIRModel:
             print(f"  Avg Precision     : {eval_result['avg_precision']:.4f}")
             print(f"  Avg Recall        : {eval_result['avg_recall']:.4f}")
             print(f"  Avg F1            : {eval_result['avg_f1']:.4f}")
+            print(f"  MAP               : {eval_result['map']:.4f}")
+            print(f"  Mean NDCG         : {eval_result['mean_ndcg']:.4f}")
             print(f"  {'-'*75}")
             for e in eval_result['per_query']:
                 print(f"  Q: \"{e['query']}\"")
                 print(f"      P={e['precision']:.4f}  R={e['recall']:.4f}  F1={e['f1']:.4f}"
+                      f"  AP={e['ap']:.4f}  NDCG={e['ndcg']:.4f}"
                       f"  ({e['relevant_retrieved']}/{e['relevant']} relevant retrieved)"
                       f"  [top-{e['retrieved']} results]")
             print(f"{'='*75}\n")
         else:
             print(f"\n  Query: \"{eval_result['query']}\"  [{eval_result['method'].upper()}]")
             print(f"  P={eval_result['precision']:.4f}  R={eval_result['recall']:.4f}"
-                  f"  F1={eval_result['f1']:.4f}"
+                  f"  F1={eval_result['f1']:.4f}  AP={eval_result['ap']:.4f}"
+                  f"  NDCG={eval_result['ndcg']:.4f}"
                   f"  ({eval_result['relevant_retrieved']}/{eval_result['relevant']} relevant retrieved)")
             print()
 
@@ -740,9 +788,10 @@ def interactive_mode(ir: ClothingIRModel) -> None:
             ir.print_query_history()
 
         elif user_input.lower() == 'eval':
-            print("  Running evaluation on test queries...")
-            eval_result = ir.evaluate_all(TEST_QUERIES, method='tfidf')
-            ir.print_evaluation(eval_result)
+            print("  Running evaluation on test queries (TF-IDF vs BM25 vs Jaccard)...")
+            for method in ('tfidf', 'bm25', 'jaccard'):
+                eval_result = ir.evaluate_all(TEST_QUERIES, method=method)
+                ir.print_evaluation(eval_result)
 
         elif user_input.lower().startswith('cat '):
             cat_name = user_input[4:].strip()
