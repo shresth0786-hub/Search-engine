@@ -40,6 +40,18 @@ Builds a dictionary mapping each unique stemmed term to the set of documents tha
 contain it. This powers fast Boolean search and candidate retrieval. The corpus
 produces **122 unique terms** across 100 documents after stemming.
 
+### 2b. Positional Index
+Extends the inverted index by storing the **positions** where each term appears
+in each document (`term → {doc_id: [positions]}`). This enables two additional
+query types:
+- **Phrase search** (`phrase [query]`) — terms must appear adjacent and in
+  order, e.g. `phrase regular fit` matches "Men's Regular Fit Kurta".
+- **Proximity search** (`near [query]`) — terms must appear in order within a
+  window of a few words, e.g. `near casual dress` matches "Casual Fit Dress".
+
+Position lists are merged with a pointer-scanning algorithm that checks whether
+each query term occurs to the right of the previous one within the allowed gap.
+
 ### 3. TF-IDF + Cosine Similarity (default search)
 - **TF (term frequency):** how often a term appears in a document, normalized
   by the document's most frequent term.
@@ -122,6 +134,8 @@ py clothing_ir_model.py
 | `your query here` | TF-IDF cosine similarity ranked search |
 | `bm25 your query` | BM25 ranked search |
 | `jaccard your query` | Jaccard set similarity search |
+| `phrase your query` | Exact phrase search (terms adjacent, in order) |
+| `near your query` | Proximity search (terms in order, within 4 words) |
 | `and term1 term2` | Boolean AND search |
 | `or term1 term2` | Boolean OR search |
 | `not term1 term2` | Boolean NOT search |
@@ -167,10 +181,12 @@ clothing_ir_model.py
 ├── ClothingIRModel            main engine
 │   ├── load_corpus()          parse corpus_100.txt
 │   ├── tokenize()             preprocessing + stemming pipeline
-│   ├── build_index()          TF, IDF, inverted index, doc vectors
+│   ├── build_index()          TF, IDF, inverted + positional indexes, vectors
 │   ├── tfidf_search()         ranked retrieval (cosine similarity)
 │   ├── bm25_search()          ranked retrieval (BM25)
 │   ├── jaccard_search()       ranked retrieval (Jaccard similarity)
+│   ├── phrase_search()        exact phrase matching via positional index
+│   ├── phrase_search_ranked() phrase results ranked by match + TF-IDF
 │   ├── boolean_search()       AND / OR / NOT set retrieval
 │   ├── query_expansion()      related-term expansion
 │   ├── evaluate()             precision / recall / F1 per query

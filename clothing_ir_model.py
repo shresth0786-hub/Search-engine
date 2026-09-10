@@ -1,9 +1,10 @@
 """A small clothing-product information retrieval system.
 
-The module parses the XML-like corpus, builds an inverted index and TF-IDF
-vectors, and exposes TF-IDF, BM25, Boolean, Jaccard, and query-expansion
-searches.  Includes Porter stemming, precision/recall/F1 evaluation, and a
-query-history log.  Run the file directly to start the interactive CLI.
+The module parses the XML-like corpus, builds an inverted index, a positional
+index, and TF-IDF vectors, and exposes TF-IDF, BM25, Boolean, Jaccard, phrase,
+proximity, and query-expansion searches.  Includes Porter stemming,
+precision/recall/F1 evaluation, and a query-history log.  Run the file directly
+to start the interactive CLI.
 """
 
 import re
@@ -165,6 +166,7 @@ class ClothingIRModel:
     def __init__(self):
         self.documents: list[Document] = []
         self.inverted_index: dict[str, set] = defaultdict(set)
+        self.positional_index: dict[str, dict[str, list[int]]] = defaultdict(dict)
         self.idf: dict[str, float] = {}
         self.doc_vectors: dict[str, dict] = {}
         self.doc_lengths: dict[str, int] = {}
@@ -229,7 +231,7 @@ class ClothingIRModel:
         return result
 
     def build_index(self) -> None:
-        """Build the inverted index, IDF values, and normalized document vectors."""
+        """Build the inverted index, positional index, IDFs and document vectors."""
         for doc in self.documents:
             combined_text = f"{doc.title} {doc.text}"
             doc.terms = self.tokenize(combined_text)
@@ -239,6 +241,8 @@ class ClothingIRModel:
             self.doc_lengths[doc.doc_id] = len(doc.terms)
             for term in set(doc.terms):
                 self.inverted_index[term].add(doc.doc_id)
+            for position, term in enumerate(doc.terms):
+                self.positional_index[term].setdefault(doc.doc_id, []).append(position)
 
         self.avg_doc_length = (
             sum(self.doc_lengths.values()) / self.num_docs if self.num_docs else 0
@@ -430,6 +434,109 @@ class ClothingIRModel:
                         expanded.append(r)
         return expanded
 
+    # -- positional / phrase search ----------------------------------------
+
+    @staticmethod
+    def _find_phrase(posting_lists: list[list[int]], max_gap: int = 1) -> bool:
+        """Check whether terms occur with in-order gaps of at most *max_gap*.
+
+        Given one sorted position list per query term, scans position lists in
+        order.  A match exists when each term appears to the right of the
+        previous one and never by more than *max_gap* positions.
+
+        *max_gap*=1 means the terms must be adjacent (phrase match);
+        larger values allow words in between (proximity match).
+        """
+        if not posting_lists:
+            return False
+        ptrs = [0] * len(posting_lists)
+        while True:
+            current_pos = posting_lists[0][ptrs[0]]
+            valid = True
+            for i in range(1, len(posting_lists)):
+                lst = posting_lists[i]
+                while ptrs[i] < len(lst) and lst[ptrs[i]] <= current_pos:
+                    ptrs[i] += 1
+                if ptrs[i] >= len(lst):
+                    return False
+                if lst[ptrs[i]] - current_pos > max_gap:
+                    valid = False
+                current_pos = lst[ptrs[i]]
+            if valid:
+                return True
+            ptrs[0] += 1
+            if ptrs[0] >= len(posting_lists[0]):
+                return False
+
+    def phrase_search(self, query: str, max_gap: int = 1) -> list[Document]:
+        """Return documents where query terms appear in order within *max_gap*.
+
+        *max_gap*=1 (default) is exact phrase matching; higher values allow
+        intervening terms so the query behaves like a proximity search.
+        """
+        query_terms = self.tokenize(query)
+        if len(query_terms) < 2:
+            return []
+
+        common_ids = None
+        for term in query_terms:
+            doc_ids = set(self.inverted_index.get(term, set()))
+            common_ids = doc_ids if common_ids is None else common_ids & doc_ids
+        if not common_ids:
+            return []
+
+        matches = []
+        for doc_id in sorted(common_ids):
+            positions = [
+                self.positional_index[term].get(doc_id, [])
+                for term in query_terms
+            ]
+            if any(not p for p in positions):
+                continue
+            if self._find_phrase(positions, max_gap=max_gap):
+                doc = next(d for d in self.documents if d.doc_id == doc_id)
+                matches.append(doc)
+        return matches
+
+    def phrase_search_ranked(self, query: str, top_k: int = 10) -> list[tuple[Document, float]]:
+        """Phrase search ranked by how many distinct term pairs match the window.
+
+        Documents with the phrase are ranked first; ties broken by TF-IDF score.
+        """
+        query_terms = self.tokenize(query)
+        if len(query_terms) < 2:
+            return []
+
+        phrase_docs = {d.doc_id for d in self.phrase_search(query, max_gap=1)}
+        proximity_docs = {d.doc_id for d in self.phrase_search(query, max_gap=4)}
+
+        scored = []
+        for doc_id in phrase_docs:
+            doc = next(d for d in self.documents if d.doc_id == doc_id)
+            base = self.cosine_similarity(
+                self._query_vector(query_terms), doc_id
+            )
+            scored.append((doc, 2.0 + base))
+        for doc_id in proximity_docs - phrase_docs:
+            doc = next(d for d in self.documents if d.doc_id == doc_id)
+            base = self.cosine_similarity(
+                self._query_vector(query_terms), doc_id
+            )
+            scored.append((doc, 1.0 + base))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:top_k]
+
+    def _query_vector(self, query_terms: list[str]) -> dict:
+        """Build an L2-normalized TF-IDF query vector from already-token terms."""
+        tf_query = Counter(query_terms)
+        max_freq = max(tf_query.values()) if tf_query else 1
+        qvec = {t: (c / max_freq) * self.idf.get(t, 0) for t, c in tf_query.items()}
+        norm = math.sqrt(sum(v ** 2 for v in qvec.values()))
+        if norm > 0:
+            qvec = {k: v / norm for k, v in qvec.items()}
+        return qvec
+
     # -- evaluation -------------------------------------------------------
 
     def evaluate(self, query: str, relevant_doc_ids: set[str],
@@ -592,6 +699,8 @@ def interactive_mode(ir: ClothingIRModel) -> None:
     print("    [query]           - TF-IDF cosine similarity search")
     print("    bm25 [query]      - BM25 ranked search")
     print("    jaccard [query]   - Jaccard similarity search")
+    print("    phrase [query]    - Phrase search (terms in order, adjacent)")
+    print("    near [query]      - Proximity search (terms within 4 words)")
     print("    and [query]       - Boolean AND search")
     print("    or [query]        - Boolean OR search")
     print("    not [query]       - Boolean NOT search")
@@ -619,9 +728,10 @@ def interactive_mode(ir: ClothingIRModel) -> None:
             break
 
         elif user_input.lower() == 'help':
-            print("  Commands: [query], bm25 [query], jaccard [query], and [query],")
-            print("            or [query], not [query], expand [query], cat [category],")
-            print("            stats, history, eval, help, quit")
+            print("  Commands: [query], bm25 [query], jaccard [query], phrase [query],")
+            print("            near [query], and [query], or [query], not [query],")
+            print("            expand [query], cat [category], stats, history, eval,")
+            print("            help, quit")
 
         elif user_input.lower() == 'stats':
             ir.print_stats()
@@ -655,6 +765,30 @@ def interactive_mode(ir: ClothingIRModel) -> None:
             results = ir.jaccard_search(query)
             ir.print_results(results, method="Jaccard")
             ir.query_history.append({'query': query, 'method': 'jaccard', 'results': len(results)})
+
+        elif user_input.lower().startswith('phrase '):
+            query = user_input[7:].strip()
+            docs = ir.phrase_search(query, max_gap=1)
+            if not docs:
+                print("  No exact phrase matches found.")
+            else:
+                print(f"\n  Phrase Search Result (exact match): {len(docs)} documents")
+                print(f"  {'-'*60}")
+                for doc in docs:
+                    print(f"  [{doc.doc_id}] {doc.category}: {doc.title}")
+            ir.query_history.append({'query': query, 'method': 'phrase', 'results': len(docs)})
+
+        elif user_input.lower().startswith('near '):
+            query = user_input[5:].strip()
+            docs = ir.phrase_search(query, max_gap=4)
+            if not docs:
+                print("  No proximity matches found.")
+            else:
+                print(f"\n  Proximity Search Result (within 4 words): {len(docs)} documents")
+                print(f"  {'-'*60}")
+                for doc in docs:
+                    print(f"  [{doc.doc_id}] {doc.category}: {doc.title}")
+            ir.query_history.append({'query': query, 'method': 'near', 'results': len(docs)})
 
         elif user_input.lower().startswith('and '):
             query = user_input[4:].strip()
