@@ -9,8 +9,6 @@ documents and lets you search them using multiple retrieval techniques.
 |------|-------------|
 | `corpus_100.txt` | Input corpus: 100 clothing documents in XML-like format |
 | `clothing_ir_model.py` | The IR system (indexer + search engine + interactive UI) |
-| `Assignment_Clothing_IR.pdf` | Full project documentation (how it works, metrics, usage) |
-| `make_pdf.py` | Script that regenerates the PDF documentation |
 
 Each document in the corpus has four fields:
 
