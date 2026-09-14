@@ -434,6 +434,109 @@ class ClothingIRModel:
                         expanded.append(r)
         return expanded
 
+    # -- spelling correction / feedback ------------------------------------
+
+    @staticmethod
+    def edit_distance(word1: str, word2: str) -> int:
+        """Levenshtein edit distance between two strings."""
+        if word1 == word2:
+            return 0
+        m, n = len(word1), len(word2)
+        prev = list(range(n + 1))
+        for i in range(1, m + 1):
+            cur = [i] + [0] * n
+            for j in range(1, n + 1):
+                cost = 0 if word1[i - 1] == word2[j - 1] else 1
+                cur[j] = min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
+            prev = cur
+        return prev[n]
+
+    def did_you_mean(self, query: str, max_distance: int = 2) -> str | None:
+        """Suggest a corrected query when it has no vocabulary match.
+
+        Each query token that does not appear in the vocabulary is compared
+        against every known term via edit distance; the closest term within
+        *max_distance* replaces it. Returns the corrected query string (or
+        ``None`` if no correction improves the query).
+        """
+        query_terms = self.tokenize(query)
+        if not query_terms:
+            return None
+        if all(t in self.inverted_index for t in query_terms):
+            return None
+
+        corrected = []
+        changed = False
+        for term in query_terms:
+            plain = term.rstrip("'") or term
+            if plain in self.inverted_index:
+                corrected.append(plain)
+                continue
+            if plain in {t.rstrip("'") for t in self.inverted_index}:
+                corrected.append(plain)
+                continue
+            best_term = None
+            best_dist = max_distance + 1
+            for vocab_term in self.inverted_index:
+                dist = self.edit_distance(plain, vocab_term.rstrip("'"))
+                if dist < best_dist:
+                    best_dist = dist
+                    best_term = plain if dist == 0 else vocab_term.rstrip("'")
+            corrected.append(best_term if best_term is not None else plain)
+            if best_term is not None:
+                changed = True
+        if not changed:
+            return None
+        return ' '.join(corrected)
+
+    def pseudo_relevance_feedback(self, query: str, top_k: int = 5,
+                                  expand_by: int = 3) -> list[str]:
+        """Expand a query using terms from the top *top_k* retrieved documents.
+
+        The query is first run through TF-IDF. The highest-TF-IDF terms of the
+        top *top_k* results (excluding the original query terms) are added to
+        the query token list, giving pseudo-relevance feedback (query
+        expansion for improved recall).
+        """
+        query_terms = self.tokenize(query)
+        if not query_terms:
+            return []
+
+        results = self.tfidf_search(query, top_k=top_k)
+        if not results:
+            return query_terms
+
+        expanded = list(query_terms)
+        candidate_terms: Counter = Counter()
+        for doc, _ in results:
+            for term, weight in doc.tfidf.items():
+                if term not in query_terms:
+                    candidate_terms[term] += weight
+
+        for term, _weight in candidate_terms.most_common(expand_by):
+            expanded.append(term)
+        return expanded
+
+    def export_results(self, results: list[tuple[Document, float]], method: str,
+                       filepath: str) -> int:
+        """Write ranked results to *filepath* in a readable text format.
+
+        Returns the number of documents written.
+        """
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(f"Clothing IR System - {method} Results\n")
+            f.write("=" * 75 + "\n")
+            if not results:
+                f.write("No results found.\n")
+                return 0
+            for rank, (doc, score) in enumerate(results, 1):
+                f.write(f"\nRank {rank}: [{doc.doc_id}] {doc.title}\n")
+                f.write(f"  Category  : {doc.category}\n")
+                f.write(f"  Score     : {score:.6f}\n")
+                snippet = doc.text[:150] + "..." if len(doc.text) > 150 else doc.text
+                f.write(f"  Snippet   : {snippet}\n")
+        return len(results)
+
     # -- positional / phrase search ----------------------------------------
 
     @staticmethod
@@ -753,6 +856,9 @@ def interactive_mode(ir: ClothingIRModel) -> None:
     print("    or [query]        - Boolean OR search")
     print("    not [query]       - Boolean NOT search")
     print("    expand [query]    - Query expansion + TF-IDF search")
+    print("    feedback [query]  - Pseudo-relevance feedback + TF-IDF search")
+    print("    suggest [query]   - Spelling-corrected search (did-you-mean)")
+    print("    export [query]    - Save TF-IDF results to results_output.txt")
     print("    cat [category]    - Filter by category")
     print("    stats             - Show corpus statistics")
     print("    history           - Show query history")
@@ -778,7 +884,8 @@ def interactive_mode(ir: ClothingIRModel) -> None:
         elif user_input.lower() == 'help':
             print("  Commands: [query], bm25 [query], jaccard [query], phrase [query],")
             print("            near [query], and [query], or [query], not [query],")
-            print("            expand [query], cat [category], stats, history, eval,")
+            print("            expand [query], feedback [query], suggest [query],")
+            print("            export [query], cat [category], stats, history, eval,")
             print("            help, quit")
 
         elif user_input.lower() == 'stats':
@@ -865,6 +972,37 @@ def interactive_mode(ir: ClothingIRModel) -> None:
             results = ir.tfidf_search(expanded_query)
             ir.print_results(results, method="TF-IDF (Expanded)")
             ir.query_history.append({'query': query, 'method': 'expand', 'results': len(results)})
+
+        elif user_input.lower().startswith('feedback '):
+            query = user_input[9:].strip()
+            feedback_terms = ir.pseudo_relevance_feedback(query)
+            feedback_query = ' '.join(feedback_terms)
+            print(f"  Feedback terms: {feedback_terms}")
+            results = ir.tfidf_search(feedback_query)
+            ir.print_results(results, method="TF-IDF (Pseudo-Relevance Feedback)")
+            ir.query_history.append({'query': query, 'method': 'feedback', 'results': len(results)})
+
+        elif user_input.lower().startswith('suggest '):
+            query = user_input[8:].strip()
+            correction = ir.did_you_mean(query)
+            if correction and correction != ' '.join(ir.tokenize(query)):
+                print(f"  Did you mean: \"{correction}\"?")
+                results = ir.tfidf_search(correction)
+                ir.print_results(results, method="TF-IDF (Spelling-Corrected)")
+                ir.query_history.append({'query': query, 'method': 'suggest', 'results': len(results)})
+            else:
+                print("  No spelling correction needed.")
+                results = ir.tfidf_search(query)
+                ir.print_results(results, method="TF-IDF Cosine Similarity")
+                ir.query_history.append({'query': query, 'method': 'tfidf', 'results': len(results)})
+
+        elif user_input.lower().startswith('export '):
+            query = user_input[7:].strip()
+            export_path = 'results_output.txt'
+            results = ir.tfidf_search(query)
+            count = ir.export_results(results, "TF-IDF Cosine Similarity", export_path)
+            print(f"  Exported {count} results to {export_path}")
+            ir.query_history.append({'query': query, 'method': 'export', 'results': len(results)})
 
         else:
             results = ir.tfidf_search(user_input)

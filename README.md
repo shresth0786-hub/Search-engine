@@ -110,6 +110,28 @@ precision/recall hide. For example, Jaccard (which ignores term weight) scores
 lower NDCG/AP on some queries than TF-IDF and BM25, even when retrieving the
 same documents.
 
+### 9b. Spelling Correction (did-you-mean)
+When a query contains tokens that do not appear in the vocabulary, the
+`suggest [query]` command compares each token against every indexed term using
+**Levenshtein edit distance** and replaces the token with the closest term
+(within distance 2). Example:
+
+```
+Query> suggest black coton shrt
+Did you mean: "black cotton shirt"?
+```
+
+### 9c. Pseudo-Relevance Feedback
+The `feedback [query]` command runs the query, assumes the top results are
+relevant, then expands the query with the highest-TF-IDF terms found in those
+top documents (excluding the original query terms). Re-running retrieval with
+the expanded query improves recall on under-specified queries.
+
+### 9d. Results Export
+The `export [query]` command runs the TF-IDF search and writes the ranked
+results to `results_output.txt` in a readable column format (rank, doc ID,
+title, category, score, snippet).
+
 ### 10. Query History
 All searches are logged during the session. Use the `history` command to
 review what queries were run and how many results each returned.
@@ -154,6 +176,9 @@ py clothing_ir_model.py
 | `or term1 term2` | Boolean OR search |
 | `not term1 term2` | Boolean NOT search |
 | `expand your query` | Query expansion, then TF-IDF search |
+| `feedback your query` | Pseudo-relevance feedback, then TF-IDF search |
+| `suggest your query` | Spelling correction (did-you-mean) + TF-IDF search |
+| `export your query` | Save TF-IDF results to `results_output.txt` |
 | `cat category_name` | List documents in a category, e.g. `cat kurta` |
 | `stats` | Show corpus statistics |
 | `history` | Show query history |
@@ -202,7 +227,10 @@ clothing_ir_model.py
 │   ├── phrase_search()        exact phrase matching via positional index
 │   ├── phrase_search_ranked() phrase results ranked by match + TF-IDF
 │   ├── boolean_search()       AND / OR / NOT set retrieval
-│   ├── query_expansion()      related-term expansion
+│   ├── query_expansion()       related-term expansion
+│   ├── did_you_mean()          Levenshtein spelling correction
+│   ├── pseudo_relevance_feedback()  expand query from top-result terms
+│   ├── export_results()        write ranked results to a file
 │   ├── average_precision()    AP metric for a single ranked list
 │   ├── ndcg()                 NDCG metric for a single ranked list
 │   ├── evaluate()             P/R/F1/AP/NDCG per query

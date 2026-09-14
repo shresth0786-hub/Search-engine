@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 IR_Assignment_Documentation.docx
 make_docx.py
+make_updates_pdf.py
+IR_Updates.pdf
+results_output.txt
