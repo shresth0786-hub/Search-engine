@@ -3,5 +3,9 @@ __pycache__/
 IR_Assignment_Documentation.docx
 make_docx.py
 make_updates_pdf.py
+make_demo_pdf.py
+make_frontend_pdf.py
 IR_Updates.pdf
+IR_DEMO_Presentation.pdf
+IR_Frontend_Study_Guide.pdf
 results_output.txt

@@ -9,6 +9,10 @@ documents and lets you search them using multiple retrieval techniques.
 |------|-------------|
 | `corpus_100.txt` | Input corpus: 100 clothing documents in XML-like format |
 | `clothing_ir_model.py` | The IR system (indexer + search engine + interactive UI) |
+| `webapp.py` | Flask web server + JSON API (`python webapp.py`) |
+| `templates/index.html` | Front-end page (search box, method tabs, results) |
+| `static/style.css` | Front-end styling |
+| `static/app.js` | Front-end logic (fetch calls, rendering, export) |
 
 Each document in the corpus has four fields:
 
@@ -132,6 +136,27 @@ The `export [query]` command runs the TF-IDF search and writes the ranked
 results to `results_output.txt` in a readable column format (rank, doc ID,
 title, category, score, snippet).
 
+### 11. Web Front End (Flask)
+The same IR engine also runs behind a browser interface:
+
+```
+pip install flask
+python webapp.py
+```
+
+Then open **http://127.0.0.1:5000**. The page offers:
+- **Stat cards** for documents, unique terms, avg doc length, categories
+- **Method tabs** to switch between TF-IDF, BM25, Jaccard, Phrase, Proximity,
+  and Boolean AND/OR/NOT
+- **Spell check** (did-you-mean), **Feedback** (pseudo-relevance feedback),
+  and **Evaluate** (MAP/NDCG table) tools
+- **Export results (.txt)** button that downloads the last search
+
+The backend (`webapp.py`) exposes a JSON API: `/api/search`, `/api/suggest`,
+`/api/feedback`, `/api/eval`, `/api/stats`. The browser (client) requests JSON
+over HTTP; ranking is always computed by the Python backend, so the CLI and the
+web app share the exact same engine.
+
 ### 10. Query History
 All searches are logged during the session. Use the `history` command to
 review what queries were run and how many results each returned.
@@ -185,6 +210,16 @@ py clothing_ir_model.py
 | `eval` | Run precision/recall/F1 evaluation |
 | `help` | Show available commands |
 | `quit` | Exit the program |
+
+### Web front-end tools
+
+| Tool | Description |
+|------|-------------|
+| Method tabs | Switch TF-IDF / BM25 / Jaccard / Phrase / Proximity / AND / OR / NOT |
+| Spell check | did-you-mean correction + re-search |
+| Feedback | pseudo-relevance feedback + re-search |
+| Evaluate | MAP / mean NDCG table across all methods |
+| Export results | download the last search as `results_output.txt` |
 
 ### Example interactive session
 
