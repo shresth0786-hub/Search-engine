@@ -13,6 +13,8 @@ documents and lets you search them using multiple retrieval techniques.
 | `templates/index.html` | Front-end page (search box, method tabs, results) |
 | `static/style.css` | Front-end styling |
 | `static/app.js` | Front-end logic (fetch calls, rendering, export) |
+| `RUN.md` | All commands to run the CLI, web app, and regenerate docs |
+| `run.bat` | One-click launcher (command-line or web version) |
 
 Each document in the corpus has four fields:
 
