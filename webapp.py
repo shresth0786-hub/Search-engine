@@ -6,7 +6,6 @@ Then open:   http://127.0.0.1:5000
 """
 
 import os
-from collections import Counter
 
 from flask import Flask, jsonify, render_template, request
 
@@ -26,11 +25,14 @@ def index():
 
 @app.route('/api/stats')
 def api_stats():
+    from collections import Counter as _Counter
+    sections = _Counter(d.section for d in ir.documents)
     return jsonify({
         'num_docs': ir.num_docs,
         'num_terms': len(ir.inverted_index),
         'avg_doc_length': round(ir.avg_doc_length, 2),
-        'categories': dict(Counter(d.category for d in ir.documents)),
+        'categories': dict(_Counter(d.category for d in ir.documents)),
+        'sections': dict(sections),
         'top_idf': [
             {'term': t, 'idf': round(ir.idf[t], 4), 'df': len(ir.inverted_index[t])}
             for t in sorted(ir.idf, key=lambda x: -ir.idf[x])[:20]
@@ -38,11 +40,42 @@ def api_stats():
     })
 
 
+def _filter_by_section(items, section):
+    """Keep only documents whose section matches, unless section is ALL/empty."""
+    section = (section or 'ALL').upper()
+    if section in ('', 'ALL'):
+        return items
+    return [it for it in items if (it[0].section if isinstance(it, tuple) else it.section) == section]
+
+
+def _serialize(results, method_label=''):
+    """Convert (doc, score) or [doc] results into JSON-safe dictionaries."""
+    payload = []
+    for i, item in enumerate(results, 1):
+        if isinstance(item, tuple):
+            doc, score = item
+            score_v = round(float(score), 4) if isinstance(score, (int, float)) else score
+        else:
+            doc = item
+            score_v = None
+        payload.append({
+            'rank': i,
+            'doc_id': doc.doc_id,
+            'title': doc.title,
+            'category': doc.category,
+            'section': doc.section,
+            'score': score_v,
+            'snippet': doc.text[:160] + ('...' if len(doc.text) > 160 else ''),
+        })
+    return payload
+
+
 @app.route('/api/search')
 def api_search():
     """Ranked search.  method = tfidf|bm25|jaccard|phrase|near|and|or|not """
     query = (request.args.get('q') or '').strip()
     method = (request.args.get('method') or 'tfidf').strip().lower()
+    section = (request.args.get('section') or 'ALL').strip()
     top_k = int(request.args.get('top_k', 10))
     if not query:
         return jsonify({'error': 'empty query', 'results': []})
@@ -69,23 +102,15 @@ def api_search():
         results = ir.tfidf_search(query, top_k)
         label = 'TF-IDF Cosine Similarity'
 
+    results = _filter_by_section(results, section)
     ir.query_history.append({'query': query, 'method': method, 'results': len(results)})
 
     return jsonify({
         'query': query,
         'method': label,
+        'section': section or 'ALL',
         'count': len(results),
-        'results': [
-            {
-                'rank': i + 1,
-                'doc_id': doc.doc_id,
-                'title': doc.title,
-                'category': doc.category,
-                'score': round(score, 4) if isinstance(score, float) else score,
-                'snippet': doc.text[:160] + ('...' if len(doc.text) > 160 else ''),
-            }
-            for i, (doc, score) in enumerate(results)
-        ],
+        'results': _serialize(results),
     })
 
 
@@ -93,24 +118,20 @@ def api_search():
 def api_suggest():
     """Spelling-corrected search."""
     query = (request.args.get('q') or '').strip()
+    section = (request.args.get('section') or 'ALL').strip()
     if not query:
         return jsonify({'error': 'empty query'})
     correction = ir.did_you_mean(query)
     used = correction or query
     results = ir.tfidf_search(used, 10)
+    results = _filter_by_section(results, section)
     ir.query_history.append({'query': query, 'method': 'suggest', 'results': len(results)})
     return jsonify({
         'original': query,
         'correction': correction,
         'searched': used,
-        'results': [
-            {
-                'rank': i + 1, 'doc_id': d.doc_id, 'title': d.title,
-                'category': d.category, 'score': round(s, 4),
-                'snippet': d.text[:160] + ('...' if len(d.text) > 160 else ''),
-            }
-            for i, (d, s) in enumerate(results)
-        ],
+        'section': section or 'ALL',
+        'results': _serialize(results),
     })
 
 
@@ -118,24 +139,20 @@ def api_suggest():
 def api_feedback():
     """Pseudo-relevance feedback search."""
     query = (request.args.get('q') or '').strip()
+    section = (request.args.get('section') or 'ALL').strip()
     if not query:
         return jsonify({'error': 'empty query'})
     terms = ir.pseudo_relevance_feedback(query)
     expanded = ' '.join(terms)
     results = ir.tfidf_search(expanded, 10)
+    results = _filter_by_section(results, section)
     ir.query_history.append({'query': query, 'method': 'feedback', 'results': len(results)})
     return jsonify({
         'query': query,
         'expanded_terms': terms,
         'expanded_query': expanded,
-        'results': [
-            {
-                'rank': i + 1, 'doc_id': d.doc_id, 'title': d.title,
-                'category': d.category, 'score': round(s, 4),
-                'snippet': d.text[:160] + ('...' if len(d.text) > 160 else ''),
-            }
-            for i, (d, s) in enumerate(results)
-        ],
+        'section': section or 'ALL',
+        'results': _serialize(results),
     })
 
 

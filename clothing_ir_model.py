@@ -154,6 +154,7 @@ class Document:
     terms: list = field(default_factory=list)
     tf: dict = field(default_factory=dict)
     tfidf: dict = field(default_factory=dict)
+    section: str = 'ALL'
 
 
 # ---------------------------------------------------------------------------
@@ -193,16 +194,33 @@ class ClothingIRModel:
         )
 
         for match in pattern.finditer(content):
+            title = match.group(3).strip()
+            section = self._detect_section(title)
             doc = Document(
                 doc_id=match.group(1).strip(),
                 category=match.group(2).strip(),
-                title=match.group(3).strip(),
-                text=match.group(4).strip()
+                title=title,
+                text=match.group(4).strip(),
+                section=section
             )
             self.documents.append(doc)
 
         self.num_docs = len(self.documents)
         print(f"Loaded {self.num_docs} documents from corpus.")
+
+    @staticmethod
+    def _detect_section(title: str) -> str:
+        """Detect the clothing section (MEN / WOMEN / KIDS / UNISEX) from a title."""
+        t = title.lower()
+        for marker, section in (
+            ("kid", "KIDS"),
+            ("men", "MEN"),
+            ("women", "WOMEN"),
+            ("unisex", "UNISEX"),
+        ):
+            if t.startswith(marker):
+                return section
+        return "ALL"
 
     def tokenize(self, text: str) -> list[str]:
         """Normalize, remove stop-words, and stem tokens."""

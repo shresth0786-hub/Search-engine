@@ -3,54 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clothing IR Search Engine</title>
+  <title>ClothiQ - Clothing Search</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="topbar">
     <div class="container topbar-inner">
-      <h1 class="logo">&#128717; Clothing IR <span>Search Engine</span></h1>
-      <button id="exportBtn" class="btn ghost" title="Download current results as .txt">Export results (.txt)</button>
+      <div class="logo">ClothiQ <span>Clothing Search</span></div>
+      <button id="exportBtn" class="btn ghost" title="Download current results as .txt">Export list</button>
     </div>
   </header>
 
-  <main class="container">
-    <div class="stats-row" id="statsRow"></div>
-
-    <section class="search-card">
-      <div class="method-tabs" id="methodTabs">
-        <button data-method="tfidf" class="tab active">TF-IDF</button>
-        <button data-method="bm25" class="tab">BM25</button>
-        <button data-method="jaccard" class="tab">Jaccard</button>
-        <button data-method="phrase" class="tab">Phrase</button>
-        <button data-method="near" class="tab">Proximity</button>
-        <button data-method="and" class="tab">AND</button>
-        <button data-method="or" class="tab">OR</button>
-        <button data-method="not" class="tab">NOT</button>
+  <section class="hero">
+    <div class="container hero-inner">
+      <h1>Find Your Perfect Outfit</h1>
+      <p class="hero-sub">Search men's, women's, and kids' clothing by style, fabric, or colour.</p>
+      <div class="hero-search">
+        <span class="search-icon">&#128269;</span>
+        <input id="queryInput" type="text" placeholder='Search e.g. "black cotton t-shirt"'
+               autocomplete="off">
+        <button id="searchBtn" class="btn primary hero-btn">Search</button>
       </div>
-      <div class="search-row">
-        <input id="queryInput" type="text" placeholder='Try: black cotton t-shirt,  or  "womens quited wintr jacket"' autocomplete="off">
-        <button id="searchBtn" class="btn primary">Search</button>
-      </div>
-      <div id="queryTools" class="query-tools">
-        <button class="tool-btn" data-tool="suggest" title="Fix spelling (did-you-mean)">Spell check</button>
-        <button class="tool-btn" data-tool="feedback" title="Expand with terms from top results">Feedback</button>
-        <button class="tool-btn" data-tool="eval" title="Run the built-in evaluation">Evaluate</button>
+      <div class="section-tabs" id="sectionTabs">
+        <button data-section="MEN" class="sect active">Men</button>
+        <button data-section="WOMEN" class="sect">Women</button>
+        <button data-section="KIDS" class="sect">Kids</button>
       </div>
       <div id="toolMsg" class="tool-msg hidden"></div>
       <div id="correctionBar" class="correction-bar hidden"></div>
-    </section>
+    </div>
+  </section>
 
-    <section class="results-section">
-      <div id="resultsHeader" class="results-header"></div>
-      <div id="results" class="results"></div>
-    </section>
+  <main class="container">
+    <div id="resultsHeader" class="results-header hidden"></div>
+    <div id="results" class="products-grid"></div>
+    <div id="emptyState" class="empty-state hidden">
+      <div class="empty-emoji">&#128717;</div>
+      <p>Search for an item above to see matching clothes.</p>
+      <p class="empty-tip">Try: <em>black t-shirt</em>, <em>winter jacket</em>, <em>kotton saree</em>, <em>slim jeans</em></p>
+    </div>
   </main>
 
   <footer class="footer">
     <div class="container">
-      Clothing Information Retrieval System &middot; TF-IDF &middot; BM25 &middot; Jaccard &middot; Boolean &middot;
-      Phrase / Proximity &middot; did-you-mean &middot; Pseudo-Relevance Feedback
+      ClothiQ &middot; Clothing Information Retrieval System
     </div>
   </footer>
 
