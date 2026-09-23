@@ -155,6 +155,7 @@ class Document:
     tf: dict = field(default_factory=dict)
     tfidf: dict = field(default_factory=dict)
     section: str = 'ALL'
+    theme: str = ''
 
 
 # ---------------------------------------------------------------------------
@@ -196,12 +197,14 @@ class ClothingIRModel:
         for match in pattern.finditer(content):
             title = match.group(3).strip()
             section = self._detect_section(title)
+            theme = self._detect_theme(title)
             doc = Document(
                 doc_id=match.group(1).strip(),
                 category=match.group(2).strip(),
                 title=title,
                 text=match.group(4).strip(),
-                section=section
+                section=section,
+                theme=theme
             )
             self.documents.append(doc)
 
@@ -221,6 +224,18 @@ class ClothingIRModel:
             if t.startswith(marker):
                 return section
         return "ALL"
+
+    @staticmethod
+    def _detect_theme(title: str) -> str:
+        """Detect a licensed/character theme (ANIME / COMIC) from a title."""
+        t = title.lower()
+        if any(k in t for k in ('anime', 'manga', 'kawaii', 'chibi', 'shonen', 'mecha')):
+            return 'ANIME'
+        if any(k in t for k in ('comic', 'superhero', 'marvel', 'dc ', 'batman',
+                                'spider', 'hero', 'villain', 'knight', 'slinger',
+                                'avenger', 'caped', 'pop-art', 'anti-hero')):
+            return 'COMIC'
+        return ''
 
     def tokenize(self, text: str) -> list[str]:
         """Normalize, remove stop-words, and stem tokens."""
@@ -1064,7 +1079,10 @@ TEST_QUERIES: list[tuple[str, set[str]]] = [
 def main():
     """Load the bundled corpus, initialize the model, and start interactive mode."""
     corpus_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               'corpus_200.txt')
+                               'corpus_300.txt')
+    if not os.path.exists(corpus_path):
+        corpus_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   'corpus_200.txt')
     if not os.path.exists(corpus_path):
         corpus_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    'corpus_100.txt')

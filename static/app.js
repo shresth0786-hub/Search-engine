@@ -16,6 +16,7 @@
 
   var currentSection = 'MEN';
   var currentCategory = '';
+  var currentTheme = '';
   var lastResults = null;
   var lastQuery = '';
 
@@ -30,20 +31,38 @@
       currentSection = btn.getAttribute('data-section');
       if (lastQuery) {
         search();
+      } else if (currentTheme) {
+        browseTheme(currentTheme);
       } else if (currentCategory) {
         browseCategory(currentCategory);
       }
     });
   });
 
+  // ---------------------------------------------------------------- theme strip
+  var themeButtons = document.querySelectorAll('.theme-strip .theme-btn');
+
   // ---------------------------------------------------------------- category strip
   var catItems = document.querySelectorAll('.cat-strip .cat-item');
   catItems.forEach(function (item) {
     item.addEventListener('click', function () {
       catItems.forEach(function (c) { c.classList.remove('active'); });
+      themeButtons.forEach(function (b) { b.classList.remove('active'); });
+      currentTheme = '';
       item.classList.add('active');
       currentCategory = item.getAttribute('data-cat');
       browseCategory(currentCategory);
+    });
+  });
+
+  themeButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      themeButtons.forEach(function (b) { b.classList.remove('active'); });
+      catItems.forEach(function (c) { c.classList.remove('active'); });
+      currentCategory = '';
+      btn.classList.add('active');
+      currentTheme = btn.getAttribute('data-theme');
+      browseTheme(currentTheme);
     });
   });
 
@@ -55,7 +74,9 @@
         var sec = txt.toUpperCase();
         sectButtons.forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-section') === sec); });
         currentSection = sec;
-        if (lastQuery) search(); else if (currentCategory) browseCategory(currentCategory);
+        if (lastQuery) search();
+        else if (currentTheme) browseTheme(currentTheme);
+        else if (currentCategory) browseCategory(currentCategory);
       });
     }
   });
@@ -123,6 +144,7 @@
         '<div class="product-card">' +
         '<div class="product-img">' +
           '<span class="tag section-' + r.section + '">' + r.section + '</span>' +
+          (r.theme ? '<span class="tag theme-' + r.theme + '">' + (r.theme === 'ANIME' ? 'Anime' : 'Comic') + '</span>' : '') +
           '<img src="' + imgUrl + '" alt="' + r.category + '" loading="lazy">' +
           '<span class="rank-badge">#' + r.rank + '</span>' +
         '</div>' +
@@ -158,10 +180,12 @@
   // ---------------------------------------------------------------- search
   function search() {
     var q = queryInput.value.trim();
-    if (!q) { browseCategory(currentCategory); return; }
+    if (!q) { if (currentTheme) return browseTheme(currentTheme); return browseCategory(currentCategory); }
     lastQuery = q;
     currentCategory = '';
+    currentTheme = '';
     catItems.forEach(function (c) { c.classList.remove('active'); });
+    themeButtons.forEach(function (b) { b.classList.remove('active'); });
     resultsHeader.classList.remove('hidden');
     emptyState.classList.add('hidden');
     loading.classList.remove('hidden');
@@ -190,6 +214,24 @@
       lastResults = data;
       sortSelect.value = 'relevance';
       resultsHeader.innerHTML = '<span class="cat-label" style="margin:0">' + cat + '</span> &middot; ' + data.section +
+        '<span class="count-pill">' + data.count + ' products</span>';
+      applySortFilters();
+    });
+  }
+
+  function browseTheme(theme) {
+    lastQuery = '';
+    resultsHeader.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+    loading.classList.remove('hidden');
+    var url = '/api/search?method=tfidf&section=' + encodeURIComponent(currentSection) +
+              '&q=' + encodeURIComponent('') + '&theme=' + encodeURIComponent(theme) + '&top_k=24';
+    fetchJson(url).then(function (data) {
+      if (data.error) { showMsg(data.error, true); return; }
+      lastResults = data;
+      sortSelect.value = 'relevance';
+      var label = theme === 'ANIME' ? 'Anime Collection' : 'Comic Collection';
+      resultsHeader.innerHTML = '<span class="cat-label" style="margin:0">' + label + '</span> &middot; ' + data.section +
         '<span class="count-pill">' + data.count + ' products</span>';
       applySortFilters();
     });

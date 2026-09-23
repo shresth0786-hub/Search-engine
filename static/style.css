@@ -102,6 +102,21 @@ body {
 .cat-item.active { border-color: var(--gold); background: rgba(232,193,90,.1); box-shadow: 0 0 0 1px var(--gold); }
 .cat-item.active .cn { color: var(--gold); }
 
+/* ---------- theme collections ---------- */
+.theme-strip { display: flex; gap: 14px; margin: 18px 0 6px; flex-wrap: wrap; }
+.theme-btn {
+  flex: 1; min-width: 220px; display: flex; align-items: center; gap: 14px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px 18px; cursor: pointer; text-align: left; transition: all .16s ease;
+}
+.theme-btn .t-icon { font-size: 30px; }
+.theme-btn .t-name { font-size: 15px; font-weight: 800; color: var(--text); }
+.theme-btn .t-sub { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.theme-btn[data-theme="ANIME"]:hover { border-color: var(--pink); background: rgba(229,72,138,.08); transform: translateY(-3px); }
+.theme-btn[data-theme="ANIME"].active { border-color: var(--pink); background: rgba(229,72,138,.12); box-shadow: 0 0 0 1px var(--pink); }
+.theme-btn[data-theme="COMIC"]:hover { border-color: var(--blue); background: rgba(77,141,255,.08); transform: translateY(-3px); }
+.theme-btn[data-theme="COMIC"].active { border-color: var(--blue); background: rgba(77,141,255,.12); box-shadow: 0 0 0 1px var(--blue); }
+
 /* ---------- toolbar ---------- */
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 22px 0 18px; padding: 14px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; flex-wrap: wrap; }
 .toolbar-left { display: flex; gap: 16px; flex-wrap: wrap; }
@@ -133,6 +148,8 @@ body {
 .tag.section-MEN { background: var(--blue); }
 .tag.section-WOMEN { background: var(--pink); }
 .tag.section-KIDS { background: var(--green); }
+.tag.theme-ANIME { background: linear-gradient(135deg, #e5488a, #8a2fb8); top: 44px; }
+.tag.theme-COMIC { background: linear-gradient(135deg, #4d8dff, #8b2fd6); top: 44px; }
 .rank-badge { position: absolute; bottom: 12px; right: 12px; background: rgba(20,21,30,.85); color: var(--gold); font-size: 12px; font-weight: 800; border-radius: 8px; padding: 4px 10px; backdrop-filter: blur(6px); border: 1px solid rgba(232,193,90,.3); }
 
 .product-body { padding: 15px 16px 17px; display: flex; flex-direction: column; flex: 1; }

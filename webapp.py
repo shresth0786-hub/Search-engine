@@ -13,7 +13,7 @@ from clothing_ir_model import ClothingIRModel, TEST_QUERIES
 from product_art import product_svg
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CORPUS_PATH = os.path.join(BASE_DIR, 'corpus_200.txt')
+CORPUS_PATH = os.path.join(BASE_DIR, 'corpus_300.txt')
 
 app = Flask(__name__)
 ir = ClothingIRModel()
@@ -75,6 +75,7 @@ def _serialize(results, method_label=''):
             'title': doc.title,
             'category': doc.category,
             'section': doc.section,
+            'theme': doc.theme or '',
             'score': score_v,
             'snippet': doc.text[:160] + ('...' if len(doc.text) > 160 else ''),
         })
@@ -94,29 +95,47 @@ def _filter_category(items, category):
     return keep
 
 
+def _filter_theme(items, theme):
+    """Keep only documents whose theme matches (case-insensitive), unless empty."""
+    if not theme:
+        return items
+    th = theme.strip().upper()
+    keep = []
+    for it in items:
+        doc = it[0] if isinstance(it, tuple) else it
+        if (doc.theme or '').upper() == th:
+            keep.append(it)
+    return keep
+
+
 @app.route('/api/search')
 def api_search():
     """Ranked search.  method = tfidf|bm25|jaccard|phrase|near|and|or|not
 
-    Optional filters: section, category.  If q is empty but category is given,
-    browse the category instead of ranking.
+    Optional filters: section, category, theme.  If q is empty but category or
+    theme is given, browse instead of ranking.
     """
     query = (request.args.get('q') or '').strip()
     method = (request.args.get('method') or 'tfidf').strip().lower()
     section = (request.args.get('section') or 'ALL').strip()
     category = (request.args.get('category') or '').strip()
+    theme = (request.args.get('theme') or '').strip()
     top_k = int(request.args.get('top_k', 10))
 
-    if not query and not category:
+    if not query and not category and not theme:
         return jsonify({'error': 'empty query', 'results': []})
 
-    browse = not query and bool(category)
+    browse = not query and bool(category or theme)
 
     if browse:
         docs = [d for d in ir.documents
-                if ((section or 'ALL') in ('', 'ALL') or d.section == section)
-                and (d.category or '').lower() == category.lower()]
-        label = f'Browse {category}'
+                if ((section or 'ALL') in ('', 'ALL') or d.section == section)]
+        if category:
+            docs = [d for d in docs if (d.category or '').lower() == category.lower()]
+            label = f'Browse {category}'
+        else:
+            docs = [d for d in docs if (d.theme or '').upper() == theme.upper()]
+            label = f'{theme.upper()} Collection'
         results = sorted(docs, key=lambda d: d.doc_id)
     else:
         # fetch extra so client-side filters keep enough results
@@ -145,6 +164,7 @@ def api_search():
 
         results = _filter_by_section(results, section)
         results = _filter_category(results, category)
+        results = _filter_theme(results, theme)
         results = results[:top_k]
 
     payload = _serialize(results, label)
@@ -155,6 +175,7 @@ def api_search():
         'method': label,
         'section': section or 'ALL',
         'category': category or '',
+        'theme': theme or '',
         'count': len(payload),
         'results': payload,
     })
