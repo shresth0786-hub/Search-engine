@@ -7,12 +7,13 @@ Then open:   http://127.0.0.1:5000
 
 import os
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, Response
 
 from clothing_ir_model import ClothingIRModel, TEST_QUERIES
+from product_art import product_svg
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CORPUS_PATH = os.path.join(BASE_DIR, 'corpus_100.txt')
+CORPUS_PATH = os.path.join(BASE_DIR, 'corpus_200.txt')
 
 app = Flask(__name__)
 ir = ClothingIRModel()
@@ -21,6 +22,16 @@ ir = ClothingIRModel()
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/api/img')
+def api_img():
+    """Real product image (SVG illustration) for a category + colour."""
+    category = (request.args.get('category') or 'T-Shirt').strip()
+    colour = (request.args.get('colour') or '').strip()
+    svg = product_svg(category, colour)
+    return Response(svg, mimetype='image/svg+xml',
+                    headers={'Cache-Control': 'public, max-age=3600'})
 
 
 @app.route('/api/stats')
@@ -70,47 +81,82 @@ def _serialize(results, method_label=''):
     return payload
 
 
+def _filter_category(items, category):
+    """Keep only documents whose category matches (case-insensitive), unless empty."""
+    if not category:
+        return items
+    cat = category.strip().lower()
+    keep = []
+    for it in items:
+        doc = it[0] if isinstance(it, tuple) else it
+        if (doc.category or '').lower() == cat:
+            keep.append(it)
+    return keep
+
+
 @app.route('/api/search')
 def api_search():
-    """Ranked search.  method = tfidf|bm25|jaccard|phrase|near|and|or|not """
+    """Ranked search.  method = tfidf|bm25|jaccard|phrase|near|and|or|not
+
+    Optional filters: section, category.  If q is empty but category is given,
+    browse the category instead of ranking.
+    """
     query = (request.args.get('q') or '').strip()
     method = (request.args.get('method') or 'tfidf').strip().lower()
     section = (request.args.get('section') or 'ALL').strip()
+    category = (request.args.get('category') or '').strip()
     top_k = int(request.args.get('top_k', 10))
-    if not query:
+
+    if not query and not category:
         return jsonify({'error': 'empty query', 'results': []})
 
-    if method == 'bm25':
-        results = ir.bm25_search(query, top_k)
-        label = 'BM25'
-    elif method == 'jaccard':
-        results = ir.jaccard_search(query, top_k)
-        label = 'Jaccard'
-    elif method == 'phrase':
-        result_ids = ir.phrase_search(query, max_gap=1)
-        results = [(d, 1.0) for d in result_ids][:top_k]
-        label = 'Phrase (exact, in order)'
-    elif method == 'near':
-        result_ids = ir.phrase_search(query, max_gap=4)
-        results = [(d, 1.0) for d in result_ids][:top_k]
-        label = 'Proximity (within 4 words)'
-    elif method in ('and', 'or', 'not'):
-        docs = ir.boolean_search(query, mode=method.upper())
-        results = [(d, 0.0) for d in docs][:top_k]
-        label = f'Boolean {method.upper()}'
-    else:
-        results = ir.tfidf_search(query, top_k)
-        label = 'TF-IDF Cosine Similarity'
+    browse = not query and bool(category)
 
-    results = _filter_by_section(results, section)
-    ir.query_history.append({'query': query, 'method': method, 'results': len(results)})
+    if browse:
+        docs = [d for d in ir.documents
+                if ((section or 'ALL') in ('', 'ALL') or d.section == section)
+                and (d.category or '').lower() == category.lower()]
+        label = f'Browse {category}'
+        results = sorted(docs, key=lambda d: d.doc_id)
+    else:
+        # fetch extra so client-side filters keep enough results
+        catch_k = max(top_k * 3, 30)
+        if method == 'bm25':
+            results = ir.bm25_search(query, catch_k)
+            label = 'BM25'
+        elif method == 'jaccard':
+            results = ir.jaccard_search(query, catch_k)
+            label = 'Jaccard'
+        elif method == 'phrase':
+            result_ids = ir.phrase_search(query, max_gap=1)
+            results = [(d, 1.0) for d in result_ids][:catch_k]
+            label = 'Phrase (exact, in order)'
+        elif method == 'near':
+            result_ids = ir.phrase_search(query, max_gap=4)
+            results = [(d, 1.0) for d in result_ids][:catch_k]
+            label = 'Proximity (within 4 words)'
+        elif method in ('and', 'or', 'not'):
+            docs = ir.boolean_search(query, mode=method.upper())
+            results = [(d, 0.0) for d in docs][:catch_k]
+            label = f'Boolean {method.upper()}'
+        else:
+            results = ir.tfidf_search(query, catch_k)
+            label = 'TF-IDF Cosine Similarity'
+
+        results = _filter_by_section(results, section)
+        results = _filter_category(results, category)
+        results = results[:top_k]
+
+    payload = _serialize(results, label)
+    ir.query_history.append({'query': query, 'method': method, 'results': len(payload)})
 
     return jsonify({
         'query': query,
         'method': label,
         'section': section or 'ALL',
-        'count': len(results),
-        'results': _serialize(results),
+        'category': category or '',
+        'count': len(payload),
+        'results': payload,
     })
 
 

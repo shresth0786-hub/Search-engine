@@ -3,50 +3,135 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClothiQ - Clothing Search</title>
+  <title>Vastra - Clothing Search Engine</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="topbar">
     <div class="container topbar-inner">
-      <div class="logo">ClothiQ <span>Clothing Search</span></div>
-      <button id="exportBtn" class="btn ghost" title="Download current results as .txt">Export list</button>
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" width="34" height="34" aria-hidden="true">
+          <defs>
+            <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#f5d987"/>
+              <stop offset="1" stop-color="#c99f2e"/>
+            </linearGradient>
+          </defs>
+          <path d="M16 4 5 13 h6 v13 h10 v-13 h6 Z" fill="url(#gold)"/>
+          <path d="M13 26 h6 v2 h-6 z" fill="#e8c15a"/>
+        </svg>
+        <span class="brand-name">Vastra</span>
+        <span class="brand-tag">Clothing Search Engine</span>
+      </div>
+      <nav class="topnav">
+        <span class="nav-link">Home</span>
+        <span class="nav-link">Men</span>
+        <span class="nav-link">Women</span>
+        <span class="nav-link">Kids</span>
+        <span class="nav-link">Shop</span>
+        <button id="exportBtn" class="btn btn-ghost" title="Download current results as .txt">&#11015; Export list</button>
+      </nav>
     </div>
   </header>
 
   <section class="hero">
     <div class="container hero-inner">
+      <p class="hero-eyebrow">VASTRA · CLOTHING INFORMATION RETRIEVAL</p>
       <h1>Find Your Perfect Outfit</h1>
-      <p class="hero-sub">Search men's, women's, and kids' clothing by style, fabric, or colour.</p>
+      <p class="hero-sub">Search 200+ premium pieces across men's, women's and kids' fashion by style, fabric or colour.</p>
       <div class="hero-search">
         <span class="search-icon">&#128269;</span>
         <input id="queryInput" type="text" placeholder='Search e.g. "black cotton t-shirt"'
                autocomplete="off">
-        <button id="searchBtn" class="btn primary hero-btn">Search</button>
+        <button id="searchBtn" class="btn btn-primary hero-btn">Search</button>
       </div>
+
       <div class="section-tabs" id="sectionTabs">
-        <button data-section="MEN" class="sect active">Men</button>
-        <button data-section="WOMEN" class="sect">Women</button>
-        <button data-section="KIDS" class="sect">Kids</button>
+        <button data-section="MEN" class="sect active">&#128102; Men</button>
+        <button data-section="WOMEN" class="sect">&#128104; Women</button>
+        <button data-section="KIDS" class="sect">&#128118; Kids</button>
       </div>
+
       <div id="toolMsg" class="tool-msg hidden"></div>
-      <div id="correctionBar" class="correction-bar hidden"></div>
     </div>
   </section>
 
   <main class="container">
+    <!-- category quick-shop -->
+    <section class="cat-strip" id="catStrip">
+      <div class="cat-item" data-cat="T-Shirt" data-query="t-shirt"><img class="ci" src="/api/img?category=T-Shirt" alt="T-Shirts" loading="lazy"><span class="cn">T-Shirts</span></div>
+      <div class="cat-item" data-cat="Jeans" data-query="jeans"><img class="ci" src="/api/img?category=Jeans" alt="Jeans" loading="lazy"><span class="cn">Jeans</span></div>
+      <div class="cat-item" data-cat="Shirt" data-query="shirt"><img class="ci" src="/api/img?category=Shirt" alt="Shirts" loading="lazy"><span class="cn">Shirts</span></div>
+      <div class="cat-item" data-cat="Kurta" data-query="kurta"><img class="ci" src="/api/img?category=Kurta" alt="Kurtas" loading="lazy"><span class="cn">Kurtas</span></div>
+      <div class="cat-item" data-cat="Saree" data-query="saree"><img class="ci" src="/api/img?category=Saree" alt="Sarees" loading="lazy"><span class="cn">Sarees</span></div>
+      <div class="cat-item" data-cat="Dress" data-query="dress"><img class="ci" src="/api/img?category=Dress" alt="Dresses" loading="lazy"><span class="cn">Dresses</span></div>
+      <div class="cat-item" data-cat="Hoodie" data-query="hoodie"><img class="ci" src="/api/img?category=Hoodie" alt="Hoodies" loading="lazy"><span class="cn">Hoodies</span></div>
+      <div class="cat-item" data-cat="Jacket" data-query="jacket"><img class="ci" src="/api/img?category=Jacket" alt="Jackets" loading="lazy"><span class="cn">Jackets</span></div>
+      <div class="cat-item" data-cat="Leggings" data-query="leggings"><img class="ci" src="/api/img?category=Leggings" alt="Leggings" loading="lazy"><span class="cn">Leggings</span></div>
+      <div class="cat-item" data-cat="Sweatshirt" data-query="sweatshirt"><img class="ci" src="/api/img?category=Sweatshirt" alt="Sweatshirts" loading="lazy"><span class="cn">Sweatshirts</span></div>
+      <div class="cat-item" data-cat="Shorts" data-query="shorts"><img class="ci" src="/api/img?category=Shorts" alt="Shorts" loading="lazy"><span class="cn">Shorts</span></div>
+      <div class="cat-item" data-cat="Track Pants" data-query="track pants"><img class="ci" src="/api/img?category=Track%20Pants" alt="Track Pants" loading="lazy"><span class="cn">Track Pants</span></div>
+      <div class="cat-item" data-cat="Salwar" data-query="salwar"><img class="ci" src="/api/img?category=Salwar" alt="Salwar" loading="lazy"><span class="cn">Salwar</span></div>
+      <div class="cat-item" data-cat="Skirt" data-query="skirt"><img class="ci" src="/api/img?category=Skirt" alt="Skirts" loading="lazy"><span class="cn">Skirts</span></div>
+      <div class="cat-item" data-cat="Co-ord Set" data-query="co-ord"><img class="ci" src="/api/img?category=Co-ord%20Set" alt="Co-ord Sets" loading="lazy"><span class="cn">Co-ord Sets</span></div>
+      <div class="cat-item" data-cat="Cardigan" data-query="cardigan"><img class="ci" src="/api/img?category=Cardigan" alt="Cardigans" loading="lazy"><span class="cn">Cardigans</span></div>
+    </section>
+
+    <!-- toolbar -->
+    <section class="toolbar" id="toolbar">
+      <div class="toolbar-left">
+        <label class="tselect">Sort by
+          <select id="sortSelect">
+            <option value="relevance" selected>Relevance</option>
+            <option value="colour">Colour</option>
+            <option value="title">Name (A–Z)</option>
+          </select>
+        </label>
+        <label class="tselect">Colour
+          <select id="colourFilter">
+            <option value="">All</option>
+            <option>Black</option>
+            <option>White</option>
+            <option>Grey</option>
+            <option>Blue</option>
+            <option>Navy</option>
+            <option>Green</option>
+            <option>Olive</option>
+            <option>Maroon</option>
+            <option>Pink</option>
+            <option>Red</option>
+            <option>Yellow</option>
+            <option>Beige</option>
+          </select>
+        </label>
+        <label class="tselect">Fabric
+          <select id="fabricFilter">
+            <option value="">All</option>
+            <option>Cotton</option>
+            <option>Linen</option>
+            <option>Denim</option>
+            <option>Polyester</option>
+          </select>
+        </label>
+      </div>
+      <div class="toolbar-right">
+        <span id="resultsCount" class="results-count"></span>
+      </div>
+    </section>
+
     <div id="resultsHeader" class="results-header hidden"></div>
     <div id="results" class="products-grid"></div>
+    <div id="loading" class="loading hidden">Searching the collection…</div>
     <div id="emptyState" class="empty-state hidden">
       <div class="empty-emoji">&#128717;</div>
-      <p>Search for an item above to see matching clothes.</p>
-      <p class="empty-tip">Try: <em>black t-shirt</em>, <em>winter jacket</em>, <em>kotton saree</em>, <em>slim jeans</em></p>
+      <p>No matching items found.</p>
+      <p class="empty-tip">Try: <em>black t-shirt</em>, <em>winter jacket</em>, <em>printed saree</em>, <em>slim jeans</em></p>
     </div>
   </main>
 
   <footer class="footer">
     <div class="container">
-      ClothiQ &middot; Clothing Information Retrieval System
+      Vastra &middot; Clothing Information Retrieval System &middot; 200 documents &middot; 16 categories
     </div>
   </footer>
 

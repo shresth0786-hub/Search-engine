@@ -1063,7 +1063,11 @@ TEST_QUERIES: list[tuple[str, set[str]]] = [
 
 def main():
     """Load the bundled corpus, initialize the model, and start interactive mode."""
-    corpus_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'corpus_100.txt')
+    corpus_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               'corpus_200.txt')
+    if not os.path.exists(corpus_path):
+        corpus_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   'corpus_100.txt')
 
     ir = ClothingIRModel()
     ir.load_corpus(corpus_path)

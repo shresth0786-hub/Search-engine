@@ -6,30 +6,20 @@
   var exportBtn = document.getElementById('exportBtn');
   var resultsBox = document.getElementById('results');
   var resultsHeader = document.getElementById('resultsHeader');
+  var resultsCount = document.getElementById('resultsCount');
   var emptyState = document.getElementById('emptyState');
+  var loading = document.getElementById('loading');
   var toolMsg = document.getElementById('toolMsg');
-  var correctionBar = document.getElementById('correctionBar');
+  var sortSelect = document.getElementById('sortSelect');
+  var colourFilter = document.getElementById('colourFilter');
+  var fabricFilter = document.getElementById('fabricFilter');
+
   var currentSection = 'MEN';
+  var currentCategory = '';
   var lastResults = null;
+  var lastQuery = '';
 
-  // Clothing icon per product type
-  var ITEM_ICON = {
-    't-shirt': '&#128087;', 'shirt': '&#128087;', 'jeans': '&#128088;',
-    'kurta': '&#128087;', 'saree': '&#128094;', 'dress': '&#128087;',
-    'hoodie': '&#128087;', 'jacket': '&#129524;', 'leggings': '&#128088;',
-    'sweatshirt': '&#128087;'
-  };
-  var FABRIC_ICON = { 'cotton': '&#10024;', 'linen': '&#10024;', 'denim': '&#10024;',
-                      'polyester': '&#10024;', 'wool': '&#10024;', 'silk': '&#10024;', 'woolen': '&#10024;' };
-
-  // soft gradient for the image area
-  var GRADS = [
-    'linear-gradient(135deg,#eef1ff,#dfe7ff)',
-    'linear-gradient(135deg,#ffeef3,#ffe3ec)',
-    'linear-gradient(135deg,#eefbf3,#dcf7e8)',
-    'linear-gradient(135deg,#fff7e9,#ffeeD2)',
-    'linear-gradient(135deg,#f2f0ff,#e9e4ff)'
-  ];
+  var FABRICS = { 'cotton': 1, 'linen': 1, 'denim': 1, 'polyester': 1, 'wool': 1, 'woolen': 1, 'silk': 1 };
 
   // ---------------------------------------------------------------- sections
   var sectButtons = document.querySelectorAll('#sectionTabs .sect');
@@ -38,94 +28,120 @@
       sectButtons.forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
       currentSection = btn.getAttribute('data-section');
-      if (queryInput.value.trim()) search();
+      if (lastQuery) {
+        search();
+      } else if (currentCategory) {
+        browseCategory(currentCategory);
+      }
     });
   });
 
-  // ---------------------------------------------------------------- api
-  function fetchJson(url) {
-    return fetch(url).then(function (r) { return r.json(); });
+  // ---------------------------------------------------------------- category strip
+  var catItems = document.querySelectorAll('.cat-strip .cat-item');
+  catItems.forEach(function (item) {
+    item.addEventListener('click', function () {
+      catItems.forEach(function (c) { c.classList.remove('active'); });
+      item.classList.add('active');
+      currentCategory = item.getAttribute('data-cat');
+      browseCategory(currentCategory);
+    });
+  });
+
+  // ---------------------------------------------------------------- nav links
+  document.querySelectorAll('.nav-link').forEach(function (link) {
+    var txt = link.textContent.trim().toLowerCase();
+    if (txt === 'men' || txt === 'women' || txt === 'kids') {
+      link.addEventListener('click', function () {
+        var sec = txt.toUpperCase();
+        sectButtons.forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-section') === sec); });
+        currentSection = sec;
+        if (lastQuery) search(); else if (currentCategory) browseCategory(currentCategory);
+      });
+    }
+  });
+
+  // ---------------------------------------------------------------- sort / filters
+  function applySortFilters() {
+    if (!lastResults) return;
+    var res = lastResults.results.slice();
+    var cF = colourFilter.value.toLowerCase();
+    var fF = fabricFilter.value.toLowerCase();
+    if (cF) res = res.filter(function (r) { return colourName(r).toLowerCase() === cF; });
+    if (fF) res = res.filter(function (r) { return fabricName(r).toLowerCase() === fF; });
+
+    var sort = sortSelect.value;
+    if (sort === 'colour') {
+      res.sort(function (a, b) { return colourName(a).localeCompare(colourName(b)); });
+    } else if (sort === 'title') {
+      res.sort(function (a, b) { return a.title.localeCompare(b.title); });
+    } else {
+      res.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+    }
+    res.forEach(function (r, i) { r.rank = i + 1; });
+    resultsBox.innerHTML = buildCards(res);
+    resultsCount.textContent = res.length + ' items';
   }
 
-  // ---------------------------------------------------------------- helpers
-  function iconFor(category, text) {
-    var key = (category || '').split('-')[0].trim().toLowerCase();
-    if (ITEM_ICON[key]) return ITEM_ICON[key];
-    var t = (text || '').toLowerCase();
-    for (var i in ITEM_ICON) {
-      if (t.indexOf(i) !== -1) return ITEM_ICON[i];
-    }
-    return '&#128717;';
+  sortSelect.addEventListener('change', applySortFilters);
+  colourFilter.addEventListener('change', applySortFilters);
+  fabricFilter.addEventListener('change', applySortFilters);
+
+  function colourName(r) {
+    var t = r.title.toLowerCase();
+    var cols = { 'black': 0, 'grey': 0, 'white': 0, 'navy blue': 0, 'navy': 0, 'blue': 0,
+                 'maroon': 0, 'mustard': 0, 'olive green': 0, 'olive': 0, 'green': 0,
+                 'pink': 0, 'floral pink': 0, 'floral': 0, 'teal': 0, 'sky blue': 0,
+                 'beige': 0, 'yellow': 0, 'purple': 0, 'red': 0, 'wine': 0, 'lavender': 0 };
+    for (var c in cols) { if (t.indexOf(c) !== -1) return c; }
+    return 'multi';
   }
 
-  function colourFrom(text) {
-    var t = (text || '').toLowerCase();
-    var colours = {
-      'black': '#22272e', 'white': '#f4f6f8', 'grey': '#8b939e', 'gray': '#8b939e',
-      'navy blue': '#25335a', 'navy': '#25335a', 'blue': '#3d6fd6', 'maroon': '#6e2430',
-      'mustard': '#d8a41b', 'olive green': '#6b7343', 'olive': '#6b7343', 'green': '#4c8a4a',
-      'pink': '#e78aa4', 'floral pink': '#e78aa4', 'floral': '#d87f9a', 'teal': '#2f8f83',
-      'sky blue': '#8fc5ea', 'beige': '#d9c3a0', 'yellow': '#e8c84f', 'purple': '#7d5ba6',
-      'red': '#c94f4f', 'wine': '#7a2c3c', 'lavender': '#b9a6d4', 'lavend': '#b9a6d4'
-    };
-    for (var c in colours) {
-      if (t.indexOf(c) !== -1) return { name: c, hex: colours[c] };
-    }
-    return { name: null, hex: '#93c6e0' };
-  }
-
-  function fabricFrom(text) {
-    var t = (text || '').toLowerCase();
-    for (var f in FABRIC_ICON) {
-      if (t.indexOf(f) !== -1) return f.charAt(0).toUpperCase() + f.slice(1);
-    }
-    return null;
+  function fabricName(r) {
+    var t = (r.snippet + ' ' + r.title).toLowerCase();
+    for (var f in FABRICS) { if (t.indexOf(f) !== -1) return f; }
+    return '';
   }
 
   // ---------------------------------------------------------------- render
-  function renderResults(data, label) {
-    lastResults = data;
-    emptyState.classList.add('hidden');
-    if (data.results.length === 0) {
-      resultsHeader.innerHTML = 'No matching clothes in <strong>' + data.section + '</strong>';
-      resultsBox.innerHTML = '';
-      emptyState.classList.remove('hidden');
-      emptyState.querySelector('p').textContent = 'No "' + data.query + '" items found in the ' + data.section + ' section.';
-      return;
-    }
-    resultsHeader.innerHTML = data.query
-      ? 'Results for <strong>"' + data.query + '"</strong>'
-      : 'Results';
-    resultsHeader.innerHTML += '<span class="count-pill">' + data.count + ' products</span>';
-
+  function buildCards(res) {
+    setTimeout(function () { loading.classList.add('hidden'); }, 0);
     var html = '';
-    data.results.forEach(function (r, idx) {
-      var colour = colourFrom(r.title);
-      var fabric = fabricFrom(r.snippet + ' ' + r.title);
-      var icon = iconFor(r.category, r.title);
-      var grad = GRADS[idx % GRADS.length];
-      var swatch = colour.name
-        ? '<span class="colour-dot" style="background:' + colour.hex + '"></span> ' + colour.name
-        : '';
+    res.forEach(function (r, idx) {
+      var col = colourName(r);
+      var fab = fabricName(r);
+      var imgUrl = '/api/img?category=' + encodeURIComponent(r.category) + '&colour=' + encodeURIComponent(col);
+      var chip = '<span class="product-title">' + r.title + '</span>' +
+        '<div class="product-meta">[' + r.doc_id + ']' +
+        (fab ? ' &middot; <span style="text-transform:capitalize">' + fab + '</span>' : '') +
+        ' &middot; <span style="text-transform:capitalize">' + col + '</span></div>' +
+        '<div class="product-snippet">' + r.snippet + '</div>' +
+        '<div class="product-foot">' +
+        '<span class="cat-chip">' + r.category + '</span>' +
+        (r.score !== null && r.score !== undefined ? '<span class="score-pill">' + r.score + '</span>' : '') +
+        '</div>';
       html +=
         '<div class="product-card">' +
-        '<div class="product-img" style="background:' + grad + '">' +
+        '<div class="product-img">' +
           '<span class="tag section-' + r.section + '">' + r.section + '</span>' +
+          '<img src="' + imgUrl + '" alt="' + r.category + '" loading="lazy">' +
           '<span class="rank-badge">#' + r.rank + '</span>' +
-          '<span>' + icon + '</span>' +
         '</div>' +
-        '<div class="product-body">' +
-          '<div class="product-title">' + r.title + '</div>' +
-          '<div class="product-meta">[' + r.doc_id + ']' + (fabric ? ' &middot; ' + fabric : '') + (swatch ? ' &middot; ' + swatch : '') + '</div>' +
-          '<div class="product-snippet">' + r.snippet + '</div>' +
-          '<div class="product-foot">' +
-            '<span class="cat-chip">' + r.category + '</span>' +
-            (r.score !== null && r.score !== undefined ? '<span class="score-pill">' + r.score + '</span>' : '') +
-          '</div>' +
-        '</div>' +
+        '<div class="product-body">' + chip + '</div>' +
         '</div>';
     });
+    return html;
+  }
+
+  function renderCards(res) {
+    var html = buildCards(res);
     resultsBox.innerHTML = html;
+    return res;
+  }
+
+  function showState(kind, html) {
+    loading.classList.add('hidden');
+    if (kind === 'empty') { emptyState.classList.remove('hidden'); resultsBox.innerHTML = ''; }
+    else if (kind === 'results') { emptyState.classList.add('hidden'); resultsBox.innerHTML = html; }
   }
 
   function showMsg(text, isError) {
@@ -135,20 +151,47 @@
     setTimeout(function () { toolMsg.classList.add('hidden'); }, 5000);
   }
 
-  function hideMsg() { toolMsg.classList.add('hidden'); }
+  function fetchJson(url) {
+    return fetch(url).then(function (r) { return r.json(); });
+  }
 
   // ---------------------------------------------------------------- search
   function search() {
     var q = queryInput.value.trim();
-    if (!q) return;
-    hideMsg();
-    correctionBar.classList.add('hidden');
+    if (!q) { browseCategory(currentCategory); return; }
+    lastQuery = q;
+    currentCategory = '';
+    catItems.forEach(function (c) { c.classList.remove('active'); });
+    resultsHeader.classList.remove('hidden');
     emptyState.classList.add('hidden');
+    loading.classList.remove('hidden');
     var url = '/api/search?method=tfidf&section=' + encodeURIComponent(currentSection) +
-            '&q=' + encodeURIComponent(q);
+              '&q=' + encodeURIComponent(q) + '&category=' + encodeURIComponent('') + '&top_k=24';
     fetchJson(url).then(function (data) {
       if (data.error) { showMsg(data.error, true); return; }
-      renderResults(data, data.method);
+      lastResults = data;
+      sortSelect.value = 'relevance';
+      resultsHeader.innerHTML = 'Results for <strong>"' + data.query + '"</strong>' +
+        '<span class="count-pill">' + data.count + ' products</span>' +
+        '<span class="cat-label">' + data.section + '</span>';
+      applySortFilters();
+    });
+  }
+
+  function browseCategory(cat) {
+    lastQuery = '';
+    resultsHeader.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+    loading.classList.remove('hidden');
+    var url = '/api/search?method=tfidf&section=' + encodeURIComponent(currentSection) +
+              '&q=' + encodeURIComponent('') + '&category=' + encodeURIComponent(cat) + '&top_k=24';
+    fetchJson(url).then(function (data) {
+      if (data.error) { showMsg(data.error, true); return; }
+      lastResults = data;
+      sortSelect.value = 'relevance';
+      resultsHeader.innerHTML = '<span class="cat-label" style="margin:0">' + cat + '</span> &middot; ' + data.section +
+        '<span class="count-pill">' + data.count + ' products</span>';
+      applySortFilters();
     });
   }
 
@@ -161,7 +204,7 @@
       showMsg('Nothing to export yet - run a search first.', true);
       return;
     }
-    var lines = ['ClothiQ - ' + lastResults.method + ' Results (' + lastResults.section + ')', '='.repeat(60), ''];
+    var lines = ['Vastra - ' + lastResults.method + ' Results (' + lastResults.section + ')', '='.repeat(60), ''];
     lastResults.results.forEach(function (r) {
       lines.push('Rank ' + r.rank + ': [' + r.doc_id + '] ' + r.title);
       lines.push('  Category: ' + r.category + '   Score: ' + r.score);
